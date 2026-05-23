@@ -80,15 +80,6 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
     });
   }, [tasks, task, tags]);
 
-  useEffect(() => {
-    if (dependsOn) {
-      const isValid = eligibleDependencies.some((t) => t._id === dependsOn);
-      if (!isValid) {
-        setDependsOn("");
-      }
-    }
-  }, [tags, eligibleDependencies, dependsOn]);
-
   /* ---------------- body scroll lock ---------------- */
   useEffect(() => {
     const scrollY = window.scrollY;
@@ -159,6 +150,7 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
   };
 
   const toggleTag = (tagName) => {
+    setDependsOn("");
     if (tagName === "Other") {
       // toggle showing the custom input
       setShowOtherInput((s) => !s);
@@ -172,6 +164,7 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
   const addCustomTag = () => {
     const raw = customTagInput.trim();
     if (!raw) return;
+    setDependsOn("");
     // avoid duplicates (case-insensitive)
     const lower = raw.toLowerCase();
     const exists = tags.some((t) => t.toLowerCase() === lower);
@@ -183,6 +176,7 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
   };
 
   const removeTag = (tagName) => {
+    setDependsOn("");
     setTags((prev) => prev.filter((t) => t !== tagName));
   };
 
