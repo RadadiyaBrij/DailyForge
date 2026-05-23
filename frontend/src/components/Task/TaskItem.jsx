@@ -9,9 +9,21 @@ const priorityStyles = {
   High: "border-red-500 bg-red-50 dark:bg-red-950/20",
 };
 
-export default function TaskItem({ task, onToggleComplete, onDelete, onUpdate, isSelected, onSelect }) {
+export default function TaskItem({ task, tasks = [], onToggleComplete, onDelete, onUpdate, isSelected, onSelect }) {
   const isCompleted = task.status === "Completed";
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const dependencyId = task.dependsOn?._id || task.dependsOn;
+  const dependencyTask = tasks.find((t) => t._id === dependencyId);
+  const isBlocked = dependencyTask && dependencyTask.status !== "Completed";
+
+  const handleToggleClick = () => {
+    if (!isCompleted && isBlocked) {
+      alert(`Cannot mark this task as completed. Please complete "${dependencyTask.title}" first.`);
+      return;
+    }
+    onToggleComplete(task);
+  };
 
   const handleEditSubmit = (updatedTask) => {
     onUpdate(task._id, updatedTask);
@@ -39,7 +51,7 @@ export default function TaskItem({ task, onToggleComplete, onDelete, onUpdate, i
           />
           {/* Checkbox */}
           <button
-            onClick={() => onToggleComplete(task)}
+            onClick={handleToggleClick}
             className={`
               w-8 h-8 rounded-md flex items-center justify-center
               border-soft shrink-0 cursor-pointer
@@ -52,15 +64,27 @@ export default function TaskItem({ task, onToggleComplete, onDelete, onUpdate, i
 
           {/* Content */}
           <div className="flex-1">
-            <p
-              className={`text-lg font-semibold ${
-                isCompleted ? "line-through text-muted" : "text-main"
-              }`}
-            >
-              {task.title}
-            </p>
+            <div className="flex items-center gap-2">
+              {isBlocked && (
+                <span className="inline-flex items-center text-amber-500" title={`Blocked by: ${dependencyTask.title}`}>
+                  🔒
+                </span>
+              )}
+              <p
+                className={`text-lg font-semibold ${
+                  isCompleted ? "line-through text-muted" : "text-main"
+                }`}
+              >
+                {task.title}
+              </p>
+            </div>
 
             <div className="flex items-center gap-4 mt-2 text-xs text-muted flex-wrap">
+              {isBlocked && (
+                <span className="text-amber-600 dark:text-amber-400 font-medium">
+                  Blocked by: {dependencyTask.title}
+                </span>
+              )}
               <span className="uppercase tracking-wide">{task.priority} priority</span>
 
               {task.dueDate && (
@@ -122,6 +146,7 @@ export default function TaskItem({ task, onToggleComplete, onDelete, onUpdate, i
       {isEditModalOpen && (
         <TaskFormModal
           task={task}
+          tasks={tasks}
           onClose={() => setIsEditModalOpen(false)}
           onSubmit={handleEditSubmit}
         />

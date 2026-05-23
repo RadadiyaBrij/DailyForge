@@ -279,6 +279,7 @@ const handleActualDurationSubmit = async () => {
                   <TaskItem
                     key={task._id}
                     task={task}
+                    tasks={tasks}
                     onToggleComplete={handleToggle}
                     onDelete={(id) => deleteTask(id)}
                     onEdit={(task) => {
@@ -363,6 +364,7 @@ const handleActualDurationSubmit = async () => {
       {isModalOpen && (
         <TaskFormModal
           task={editingTask}
+          tasks={tasks}
           onClose={() => {
             setIsModalOpen(false);
             setTaskError("");

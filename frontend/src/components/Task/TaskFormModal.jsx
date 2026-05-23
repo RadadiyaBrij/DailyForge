@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { TAGS } from "../../utils/tagUtils";
@@ -9,12 +9,13 @@ const DESCRIPTION_WARNING_LENGTH = 450;
 const TITLE_MAX_LENGTH = 30;
 const TITLE_WARNING_LENGTH = 25;
 
-export default function TaskFormModal({ task, onClose, onSubmit, errorMessage, onError }) {
+export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, errorMessage, onError }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState([]);
   const [priority, setPriority] = useState("Low");
   const [dueDate, setDueDate] = useState("");
+  const [dependsOn, setDependsOn] = useState("");
 
   const [showOtherInput, setShowOtherInput] = useState(false);
   const [customTagInput, setCustomTagInput] = useState("");
@@ -45,16 +46,48 @@ export default function TaskFormModal({ task, onClose, onSubmit, errorMessage, o
       setPriority(task.priority || "Low");
       setDueDate(
         task.dueDate
-        ? new Date(task.dueDate)
-        .toLocaleString("sv-SE")
-        .replace(" ", "T")
-        .slice(0, 16)
-        : ""
+          ? new Date(task.dueDate)
+              .toLocaleString("sv-SE")
+              .replace(" ", "T")
+              .slice(0, 16)
+          : ""
       );
+      setDependsOn(task.dependsOn ? (task.dependsOn._id || task.dependsOn) : "");
       /* eslint-enable react-hooks/set-state-in-effect */
+    } else {
+      setDependsOn("");
+      setTitle("");
+      setDescription("");
+      setTags([]);
+      setPriority("Low");
+      setDueDate("");
     }
     onError?.("");
   }, [task, onError]);
+
+  const eligibleDependencies = useMemo(() => {
+    return (tasks || []).filter((t) => {
+      if (task && t._id === task._id) return false;
+
+      if (
+        task &&
+        ((t.dependsOn?._id || t.dependsOn)?.toString() === task._id.toString())
+      ) {
+        return false;
+      }
+
+      return t.tags?.some((tag) => tags.includes(tag));
+    });
+  }, [tasks, task, tags]);
+
+  useEffect(() => {
+    if (dependsOn) {
+      const isValid = eligibleDependencies.some((t) => t._id === dependsOn);
+      if (!isValid) {
+        setDependsOn("");
+      }
+    }
+  }, [tags, eligibleDependencies, dependsOn]);
 
   /* ---------------- body scroll lock ---------------- */
   useEffect(() => {
@@ -105,6 +138,15 @@ export default function TaskFormModal({ task, onClose, onSubmit, errorMessage, o
       return alert("Due date cannot be more than 1 year in the future");
     }
 
+    if (dependsOn) {
+      const depTask = tasks.find((t) => t._id === dependsOn);
+      if (depTask && depTask.dueDate) {
+        if (new Date(dueDate) < new Date(depTask.dueDate)) {
+          return alert(`Due date cannot be earlier than the dependency task's due date (${new Date(depTask.dueDate).toLocaleString()})`);
+        }
+      }
+    }
+
     onSubmit({
       title: title.trim(),
       description: description.trim(),
@@ -112,6 +154,7 @@ export default function TaskFormModal({ task, onClose, onSubmit, errorMessage, o
       priority,
       status: task ? task.status : "Due",
       dueDate,
+      dependsOn: dependsOn || null,
     });
   };
 
@@ -340,6 +383,32 @@ export default function TaskFormModal({ task, onClose, onSubmit, errorMessage, o
              bg-transparent text-main"
   required
 />
+          </div>
+
+          {/* Dependency Dropdown */}
+          <div>
+            <label className="text-sm font-medium text-main">Depends On</label>
+            <select
+              value={dependsOn}
+              onChange={(e) => setDependsOn(e.target.value)}
+              className="w-full mt-1 p-2 border border-soft rounded-lg
+                         focus:ring-(--primary) focus:border-(--primary)
+                         bg-transparent text-main dark:bg-slate-800"
+            >
+              <option value="" className="dark:bg-slate-800">None</option>
+              {eligibleDependencies.map((t) => (
+                <option key={t._id} value={t._id} className="dark:bg-slate-800">
+                  {t.title}
+                </option>
+              ))}
+            </select>
+            {tags.length === 0 ? (
+              <p className="text-xs text-muted mt-1">Select a tag first to see eligible tasks.</p>
+            ) : eligibleDependencies.length === 0 ? (
+              <p className="text-xs text-muted mt-1">No other tasks share the selected tags.</p>
+            ) : (
+              <p className="text-xs text-muted mt-1">Select a task that must be completed first.</p>
+            )}
           </div>
 
           {/* Submit Button */}

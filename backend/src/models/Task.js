@@ -38,6 +38,12 @@ const taskSchema = mongoose.Schema(
       type: Number,
       default: null,
     },
+    dependsOn: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Tasks",
+      required: false,
+      default: null,
+    },
   },
   { timestamps: true },
 );

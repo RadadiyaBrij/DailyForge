@@ -29,7 +29,7 @@ export const createTask = async (req, res) => {
     }
 
     // fetch details for task from request body
-    const { title, description, tags, priority, status, dueDate } = req.body;
+    const { title, description, tags, priority, status, dueDate, dependsOn } = req.body;
     if (!title || !priority || !status || !dueDate) {
       return res
         .status(400)
@@ -65,6 +65,40 @@ export const createTask = async (req, res) => {
         .status(409)
         .json({ success: false, message: "A task with the same title and due date already exists" });
     }
+
+    let finalDependsOn = dependsOn;
+    if (finalDependsOn === "" || finalDependsOn === "none" || finalDependsOn === "None") {
+      finalDependsOn = null;
+    }
+
+    if (finalDependsOn) {
+      if (!mongoose.Types.ObjectId.isValid(finalDependsOn)) {
+        return res.status(400).json({ success: false, message: "Invalid dependency ID format" });
+      }
+      const dependent = await Task.findOne({ _id: finalDependsOn, userId });
+      if (!dependent) {
+        return res.status(400).json({ success: false, message: "Dependency task not found" });
+      }
+      const currentTags = tags || [];
+      const dependencyTags = dependent.tags || [];
+      const commonTag = dependencyTags.some(tag => currentTags.includes(tag));
+      if (!commonTag) {
+        return res.status(400).json({ success: false, message: "Dependency task must share at least one tag" });
+      }
+      if (dueDateValue < new Date(dependent.dueDate)) {
+        return res.status(400).json({
+          success: false,
+          message: "Due date cannot be earlier than the dependency task's due date"
+        });
+      }
+      if (status === "Completed" && dependent.status !== "Completed") {
+        return res.status(400).json({
+          success: false,
+          message: "Cannot create task as completed when its dependency is incompleted."
+        });
+      }
+    }
+
     // new task object
     const newTask = new Task({
       userId: userId,
@@ -74,6 +108,7 @@ export const createTask = async (req, res) => {
       priority,
       status,
       dueDate,
+      dependsOn: finalDependsOn,
     });
 
     // save task in database
@@ -104,7 +139,7 @@ export const getTasks = async (req, res) => {
     }
 
     // fetch tasks from database
-    const tasks = await Task.find({ userId: userId }).sort({ createdAt: -1 });
+    const tasks = await Task.find({ userId: userId }).populate("dependsOn", "title status dueDate tags").sort({ createdAt: -1 });
     if (tasks.length == 0) {
       return res.status(200).json({ success: true, tasks: [] });
     }
@@ -157,6 +192,59 @@ export const updateTask = async (req, res) => {
       return res
         .status(400)
         .json({ success: false, message: "Title must be 50 characters or less" });
+    }
+
+    const taskToUpdate = await Task.findOne({ _id: taskId, userId });
+    if (!taskToUpdate) {
+      return res.status(404).json({
+        message: "Task not found",
+      });
+    }
+
+    if (updates.dependsOn === "" || updates.dependsOn === "none" || updates.dependsOn === "None") {
+      updates.dependsOn = null;
+    }
+
+    const finalTags = updates.tags !== undefined ? updates.tags : taskToUpdate.tags;
+    const finalDependsOn = updates.dependsOn !== undefined ? updates.dependsOn : taskToUpdate.dependsOn;
+    const finalStatus = updates.status !== undefined ? updates.status : taskToUpdate.status;
+    const finalDueDate = updates.dueDate ? new Date(updates.dueDate) : new Date(taskToUpdate.dueDate);
+
+    if (finalDependsOn) {
+      if (finalDependsOn.toString() === taskId.toString()) {
+        return res.status(400).json({ success: false, message: "A task cannot depend on itself" });
+      }
+      if (!mongoose.Types.ObjectId.isValid(finalDependsOn)) {
+        return res.status(400).json({ success: false, message: "Invalid dependency ID format" });
+      }
+      const dependent = await Task.findOne({ _id: finalDependsOn, userId });
+      if (!dependent) {
+        return res.status(400).json({ success: false, message: "Dependency task not found" });
+      }
+      if (dependent.dependsOn?.toString() === taskId.toString()) {
+        return res.status(400).json({
+          success: false,
+          message: "Circular dependency is not allowed",
+        });
+      }
+      const currentTags = finalTags || [];
+      const dependencyTags = dependent.tags || [];
+      const commonTag = dependencyTags.some(tag => currentTags.includes(tag));
+      if (!commonTag) {
+        return res.status(400).json({ success: false, message: "Dependency task must share at least one tag" });
+      }
+      if (finalDueDate < new Date(dependent.dueDate)) {
+        return res.status(400).json({
+          success: false,
+          message: "Due date cannot be earlier than the dependency task's due date"
+        });
+      }
+      if (finalStatus === "Completed" && dependent.status !== "Completed") {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot complete task because it is blocked by task: "${dependent.title}"`
+        });
+      }
     }
 
     // fetch task from database and update
