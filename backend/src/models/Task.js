@@ -42,6 +42,9 @@ const taskSchema = mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Tasks",
       required: false,
+    },
+    completedAt: {
+      type: Date,
       default: null,
     },
   },
