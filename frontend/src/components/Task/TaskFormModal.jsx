@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { TAGS } from "../../utils/tagUtils";
@@ -17,9 +17,11 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
   const [dueDate, setDueDate] = useState("");
   const [dependsOn, setDependsOn] = useState("");
   const [dueTime, setDueTime] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [showOtherInput, setShowOtherInput] = useState(false);
   const [customTagInput, setCustomTagInput] = useState("");
+  const submitLockRef = useRef(false);
 
   const today = new Date();
   const todayStr =
@@ -40,7 +42,6 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
 
   useEffect(() => {
     if (task) {
-      /* eslint-disable react-hooks/set-state-in-effect */
       setTitle(task.title || "");
       setDescription(task.description || "");
       setTags(Array.isArray(task.tags) ? task.tags : []);
@@ -56,7 +57,6 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
       }
 
       setDependsOn(task.dependsOn ? (task.dependsOn._id || task.dependsOn) : "");
-      /* eslint-enable react-hooks/set-state-in-effect */
     } else {
       setDependsOn("");
       setTitle("");
@@ -116,6 +116,7 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitLockRef.current) return;
 
     onError?.("");
 
@@ -146,15 +147,24 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
       }
     }
 
-    onSubmit({
-      title: title.trim(),
-      description: description.trim(),
-      tags: tags,
-      priority,
-      status: task ? task.status : "Due",
-      dueDate: `${dueDate}T${dueTime}:00`,
-      dependsOn: dependsOn || null,
-    });
+    try {
+      submitLockRef.current = true;
+      setIsSubmitting(true);
+      await Promise.resolve(
+        onSubmit({
+          title: title.trim(),
+          description: description.trim(),
+          tags: tags,
+          priority,
+          status: task ? task.status : "Due",
+          dueDate: `${dueDate}T${dueTime}:00`,
+          dependsOn: dependsOn || null,
+        }),
+      );
+    } finally {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+    }
   };
 
   const toggleTag = (tagName) => {
@@ -214,6 +224,7 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
           {/* Close button */}
           <button
             onClick={onClose}
+            disabled={isSubmitting}
             className="absolute top-4 right-4 p-1 rounded-full text-main
                      hover:bg-gray-100 dark:hover:bg-slate-700"
             aria-label="Close modal"
@@ -239,6 +250,7 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                disabled={isSubmitting}
                 className="w-full mt-1 p-2 border border-soft rounded-lg
                          focus:ring-(--primary) focus:border-(--primary)
                          bg-transparent text-main"
@@ -267,6 +279,7 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                disabled={isSubmitting}
                 className="w-full mt-1 p-2 border border-soft rounded-lg
                          focus:ring-(--primary) focus:border-(--primary)
                          bg-transparent text-main"
@@ -298,6 +311,7 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
                       key={tag}
                       type="button"
                       onClick={() => toggleTag(tag)}
+                      disabled={isSubmitting}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                         isSelected
                           ? "ring-2 ring-offset-1"
@@ -317,12 +331,14 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
                     type="text"
                     value={customTagInput}
                     onChange={(e) => setCustomTagInput(e.target.value)}
+                    disabled={isSubmitting}
                     className="flex-1 p-2 border border-soft rounded-lg bg-transparent text-main"
                     placeholder="Enter custom tag (e.g., 'Essay')"
                   />
                   <button
                     type="button"
                     onClick={addCustomTag}
+                    disabled={isSubmitting}
                     className="btn btn-primary px-3 py-1.5"
                   >
                     Add
@@ -342,6 +358,7 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
                       <button
                         type="button"
                         onClick={() => removeTag(ct)}
+                        disabled={isSubmitting}
                         className="text-xs text-red-500 px-1"
                         aria-label={`Remove tag ${ct}`}
                       >
@@ -363,6 +380,7 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
+                disabled={isSubmitting}
                 className="w-full mt-1 p-2 border border-soft rounded-lg
                          focus:ring-(--primary) focus:border-(--primary)
                          bg-transparent text-main dark:bg-slate-800"
@@ -385,6 +403,7 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
                 min={task ? undefined : todayStr}
                 max={maxDateStr}
                 onChange={(e) => setDueDate(e.target.value)}
+                disabled={isSubmitting}
                 className="w-full mt-1 p-2 border border-soft rounded-lg
                focus:ring-(--primary) focus:border-(--primary)
                bg-transparent text-main"
@@ -399,6 +418,7 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
                 type="time"
                 value={dueTime}
                 onChange={(e) => setDueTime(e.target.value)}
+                disabled={isSubmitting}
                 className="w-full mt-1 p-2 border border-soft rounded-lg
                focus:ring-(--primary) focus:border-(--primary)
                bg-transparent text-main"
@@ -435,9 +455,16 @@ export default function TaskFormModal({ task, tasks = [], onClose, onSubmit, err
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full btn btn-primary py-2 mt-2 hover-lift"
+              disabled={isSubmitting}
+              className="w-full btn btn-primary py-2 mt-2 hover-lift disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {task ? "Update Task" : "Add Task"}
+              {isSubmitting
+                ? task
+                  ? "Updating..."
+                  : "Adding..."
+                : task
+                  ? "Update Task"
+                  : "Add Task"}
             </button>
           </form>
         </div>
