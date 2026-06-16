@@ -37,14 +37,6 @@ const taskSchema = mongoose.Schema(
       required: true,
     },
 
-    dependsOn: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "Tasks",
-  default: null,
-},
-
-
-
     actualDuration: {
       type: Number,
       default: null,
